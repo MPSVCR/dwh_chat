@@ -1,6 +1,6 @@
 import os
 from typing import Any
-from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_postgres.vectorstores import PGVector
 from langchain_openai import AzureOpenAIEmbeddings
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 
@@ -10,7 +10,13 @@ embeddings_model = AzureOpenAIEmbeddings(
     api_version=os.environ["AZURE_OPENAI_API_VERSION"]
 )
 
-vector_store = InMemoryVectorStore(embedding=embeddings_model)
+vector_store = PGVector(
+    embeddings=embeddings_model,
+    collection_name=os.environ["PGVECTOR_COLLECTION"],
+    connection=os.environ["POSTGRES_CONNECTION"],
+    use_jsonb=True,
+    create_extension=False
+)
 
 _headers_to_split_on = [
     ("#", "Header 1"),
@@ -25,4 +31,3 @@ def load_markdown(markdown_str: str, metadata: dict[str, Any]):
         document.metadata.update(metadata)
     vector_store.add_documents(documents)
 
-print(vector_store.similarity_search("Pear", k=1, filter={"source": "wiki"}))
