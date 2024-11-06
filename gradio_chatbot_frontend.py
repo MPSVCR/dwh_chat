@@ -1,20 +1,6 @@
-import random
 from typing import Any
 import gradio as gr
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-from langchain_openai import AzureChatOpenAI
-from langchain_core.messages import HumanMessage
-
-
-model = AzureChatOpenAI(
-    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-    azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
-    api_version=os.environ["AZURE_OPENAI_API_VERSION"]
-)
+from rag.chat_model import model
 
 def random_response(message: str, history: list[dict[str, Any]]):
     messages_sent_to_bot = [
@@ -25,7 +11,6 @@ def random_response(message: str, history: list[dict[str, Any]]):
     stream_response = model.stream(messages_sent_to_bot)
     total_text = ""
     for chunk in stream_response:
-        print("chunk:", chunk.content)
         total_text += chunk.content
         yield total_text
 
