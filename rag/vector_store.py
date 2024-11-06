@@ -30,4 +30,3 @@ def load_markdown(markdown_str: str, metadata: dict[str, Any]):
     for document in documents:
         document.metadata.update(metadata)
     vector_store.add_documents(documents)
-
