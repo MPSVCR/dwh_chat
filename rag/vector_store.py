@@ -1,4 +1,5 @@
 import os
+from typing import Any
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_openai import AzureOpenAIEmbeddings
 from langchain_text_splitters import MarkdownHeaderTextSplitter
@@ -18,8 +19,10 @@ _headers_to_split_on = [
 ]
 markdown_splitter = MarkdownHeaderTextSplitter(_headers_to_split_on)
 
-def load_markdown(markdown_str: str):
+def load_markdown(markdown_str: str, metadata: dict[str, Any]):
     documents = markdown_splitter.split_text(markdown_str)
+    for document in documents:
+        document.metadata.update(metadata)
     vector_store.add_documents(documents)
 
-print(vector_store.similarity_search("Pear", k=1))
+print(vector_store.similarity_search("Pear", k=1, filter={"source": "wiki"}))

@@ -6,7 +6,7 @@ from rag.vector_store import load_markdown, vector_store
 with open("data.md") as f:
     content = f.read()
 
-load_markdown(content)
+load_markdown(content, {})
 
 
 def random_response(message: str, history: list[dict[str, Any]]):
