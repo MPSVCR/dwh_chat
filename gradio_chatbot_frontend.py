@@ -1,8 +1,7 @@
 from typing import Any
 import gradio as gr
 from rag.chat_model import model
-from rag.grader_model import evaluate_individual_contexts
-from rag.vector_store import vector_store
+from rag.grader_model import get_relevant_db_metadata, get_relevant_wiki
 from rag.contextualize import contextualize_user_message_with_history
 
 chatbot_system_message = (
@@ -13,13 +12,21 @@ def chatbot_response(message: str, history: list[dict[str, Any]]):
     self_contained_msg = contextualize_user_message_with_history(message, history)
     print(f"HISTORY SHORTENED TO MESSAGE: '{self_contained_msg}'")
 
-    closest_documents = vector_store.similarity_search(self_contained_msg)
-    closest_documents = evaluate_individual_contexts(self_contained_msg, closest_documents)
+    closest_wiki_documents = get_relevant_wiki(self_contained_msg)
+    closest_db_metadata = get_relevant_db_metadata(self_contained_msg)
 
     system_prompt = str(chatbot_system_message)
-    system_prompt += "Context:" + "\nContext:".join(d.page_content for d in closest_documents)
     
-    
+    if closest_wiki_documents:
+        system_prompt += "These documents originate from our Wikipedia\n"
+        system_prompt += "Context:\n"
+        system_prompt += "\n\nContext:\n".join(d.page_content for d in closest_wiki_documents)
+
+    if closest_db_metadata:
+        system_prompt += "Here are our database metadata that relate to the user's question\n"
+        system_prompt += "DB metadata:\n"
+        system_prompt += "\n\nDB metadata:\n".join(d.page_content for d in closest_db_metadata)
+
     messages_sent_to_bot = [{"role": "system", "content": system_prompt}] + [
         {"role": msg["role"], "content": msg["content"] }
         for msg in history
@@ -31,18 +38,21 @@ def chatbot_response(message: str, history: list[dict[str, Any]]):
         total_text += chunk.content
         yield total_text
 
-    total_text += f"\n\n\n### REFERENCES:\n{'\n'.join('- *' + d.metadata['TLSource'] + ' -- ' + d.metadata['source'] + '*' for d in closest_documents)}"
+    all_documents = closest_wiki_documents + closest_db_metadata
+
+    total_text += f"\n\n\n### REFERENCES:\n{'\n'.join('- *' + d.metadata['TLSource'] + ' -- ' + d.metadata['source'] + '*' for d in all_documents)}"
     yield {
         "role": "assistant",
         "content": total_text,
     }
 
-
-CSS ="""
-.contain { display: flex; flex-direction: column; }
-.gradio-container { height: 100vh !important; }
-#component-0 { height: 100%; }
-#chatbot { flex-grow: 1; overflow: auto;}
-"""
-
-gr.ChatInterface(chatbot_response, css=CSS, chatbot=gr.Chatbot(elem_id="chatbot", show_label=True, type="messages", height="80%"), type="messages").launch()
+gr.ChatInterface(
+    chatbot_response,
+    chatbot=gr.Chatbot(
+        elem_id="chatbot",
+        show_label=True,
+        type="messages",
+        height=800
+    ),
+    type="messages",
+).launch()
