@@ -10,7 +10,6 @@ def _get_relevant_data(self_contained_msg: str, template: str, chunk_name: str, 
         filter={"TLSource": tl_source}
     )
 
-    # print("CHUNK_NAME", chunk_name, "CLOSEST DOCUMENTS:", closest_documents)
     if not closest_documents:
         return closest_documents
     closest_documents = evaluate_individual_contexts(self_contained_msg, closest_documents, template, chunk_name)
@@ -20,8 +19,8 @@ def get_relevant_db_metadata(self_contained_msg: str):
     template = """You are a grader assessing relevance of retrieved database metadata to a user question. We have a list
 of database metadata files, which may contain the answer or which may relate to the posed question. Please, check the
 comments and the table names in order to assess whether the table may contain relevant data. If the user question does not
-require any generation of database code (SQL), or does not contain any query about the database, then all the metadata
-are irellevant.
+require any generation of database code (SQL), or does not ask for specific database tables, then all the database metadata
+chunks are irellevant.
 
 Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question.
 Provide a JSON of array of dicts with a single key 'score' for each db metadata and no preamble or explanation.
@@ -77,6 +76,8 @@ def evaluate_individual_contexts(
 
     result_content = result.content
 
+    if result_content.startswith("```") and result_content.endswith("```"):
+        result_content = result_content.removeprefix("```").removesuffix("```")
     if result_content.startswith("json"):
         result_content = result_content.removeprefix("json")
 

@@ -32,20 +32,23 @@ def chatbot_response(message: str, history: list[dict[str, Any]]):
     system_prompt = ""
     
     if closest_wiki_documents:
+        print("USING WIKI DOCUMENTS")
         system_prompt += "These documents originate from our Wikipedia\n"
         system_prompt += "Context:\n"
         system_prompt += "\n\nContext:\n".join(d.page_content for d in closest_wiki_documents)
 
     if closest_db_metadata:
+        print("USING DB METADATA")
         system_prompt += "Here are our database metadata that relate to the user's question\n"
         system_prompt += "DB metadata:\n"
         system_prompt += "\n\nDB metadata:\n".join(d.page_content for d in closest_db_metadata)
 
     if closest_meeting_metadata:
+        print("USING MEETING METADATA")
         system_prompt += (
             "Here are excerpts from meetings that relate to the user's question\n"
-            "If you use the excerpt from a meeting, then instead of just referencing the information,\n"
-            "inform the user that \"according to Mr. Hajek <information>\""
+            "If you have the information about who said that information, then instead of just referencing the information,\n"
+            "inform the user about the person or instance that originated that information."
         )
         system_prompt += "Meeting excerpt:\n"
         system_prompt += "\n\nMeeting excerpt:\n".join(d.page_content for d in closest_meeting_metadata)
@@ -82,6 +85,8 @@ def chatbot_response(message: str, history: list[dict[str, Any]]):
             url = "https://dev.azure.com/mpsvcrtest/DWH/_git/wiki?path=" + file_path
         elif d.metadata['TLSource'] == "meeting_transcript":
             name = f"**Meeting transcript**: source: `{d.metadata['source']}` time: `{d.metadata['Timestamp']}`"
+        elif d.metadata['TLSource'] == "db_metadata":
+            name = f"**database**: `{d.metadata['source']}`"
         
         reference_names[name] = url
 
