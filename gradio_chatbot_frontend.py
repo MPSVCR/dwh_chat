@@ -3,6 +3,7 @@ import gradio as gr
 from rag.chat_model import model
 from rag.grader_model import get_relevant_db_metadata, get_relevant_meeting_data, get_relevant_wiki
 from rag.contextualize import contextualize_user_message_with_history
+import re
 
 chatbot_system_message = (
     "You are a chatbot for the Ministry of Social Affairs, acting as a helpful assistant.\n"
@@ -12,11 +13,11 @@ chatbot_system_message = (
     "1. If the information needed to answer a question is not in the provided context, respond with:\n"
     "   'I do not have enough relevant information to answer the question.'\n"
     "2. Always maintain a concise and direct style in your responses. Aim to keep answers short and to the point.\n"
-    "3. Your users are analysts, developers, and business analysts, so respond with clarity and precision, using professional language.\n"
-    "4. Avoid adding any assumptions or interpretations; stay strictly within the information provided.\n"
-    "5. If the question is unclear or incomplete, ask for clarification instead of attempting an answer.\n"
+    "3. Avoid adding any assumptions or interpretations; stay strictly within the information provided.\n"
+    "4. If any table is referenced, then please use its full name, the full names of the tables are very relevant.\n"
     "\n"
     "Remember: Context is your only source of knowledge for each response. Do not use personal insight or general knowledge.\n"
+    "If you have any context, use it to answer the question.\n"
     "All responses should be provided in Czech.\n"
 )
 
@@ -33,35 +34,47 @@ def chatbot_response(message: str, history: list[dict[str, Any]]):
     
     if closest_wiki_documents:
         print("USING WIKI DOCUMENTS")
-        system_prompt += "These documents originate from our Wikipedia\n"
-        system_prompt += "Context:\n"
-        system_prompt += "\n\nContext:\n".join(d.page_content for d in closest_wiki_documents)
+        system_prompt += "\nSTART OF PROVIDED CONTEXT:\n"
+        system_prompt += "\nThese documents originate from our Wikipedia\n"
+        system_prompt += "Wiki Context:\n"
+        system_prompt += ("-" * 5 + "\n\nWiki Context:\n").join(d.page_content for d in closest_wiki_documents)
 
     if closest_db_metadata:
         print("USING DB METADATA")
-        system_prompt += "Here are our database metadata that relate to the user's question\n"
+        if system_prompt:
+            system_prompt += "\n" + ("-" * 5)
+        else:
+            system_prompt += "\nSTART OF PROVIDED CONTEXT:\n"
+        system_prompt += "\nHere are our database metadata that relate to the user's question\n"
         system_prompt += "DB metadata:\n"
-        system_prompt += "\n\nDB metadata:\n".join(d.page_content for d in closest_db_metadata)
+        system_prompt += ("-" * 5 + "\n\nDB metadata:\n").join(d.page_content for d in closest_db_metadata)
 
     if closest_meeting_metadata:
         print("USING MEETING METADATA")
+        if system_prompt:
+            system_prompt += "\n" + ("-" * 5)
+        else:
+            system_prompt += "\nSTART OF PROVIDED CONTEXT:\n"
         system_prompt += (
-            "Here are excerpts from meetings that relate to the user's question\n"
+            "\nHere are excerpts from meetings that relate to the user's question\n"
             "If you have the information about who said that information, then instead of just referencing the information,\n"
-            "inform the user about the person or instance that originated that information."
+            "inform the user about the person or instance that originated that information. For example, if the information"
+            " was told in a meeting by \"Vojtěch Šíp\" at time 00:00:00, tell that the information holds according to Vojtěch Šíp at time 00:00:00."
         )
-        system_prompt += "Meeting excerpt:\n"
-        system_prompt += "\n\nMeeting excerpt:\n".join(d.page_content for d in closest_meeting_metadata)
+        system_prompt += "\nMeeting excerpt:\n"
+        system_prompt += ("-" * 5 + "\n\nMeeting excerpt:\n").join(d.page_content for d in closest_meeting_metadata)
 
     if not system_prompt:
-        system_prompt = chatbot_system_message + "Please respond that you have no relevant information for the user's query."
+        system_prompt = "Please respond that you have no relevant information for the user's query."
+    else:
+        system_prompt += "\nEnd of provided context\n\n"
 
     system_prompt = chatbot_system_message + system_prompt
 
     messages_sent_to_bot = [
         {"role": "system", "content": system_prompt}
     ] + [
-        {"role": msg["role"], "content": msg["content"] }
+        {"role": msg["role"], "content": re.sub(r"### REFERENCE.*", "", msg["content"]) }
         for msg in history
     ] + [
         {"role": "user", "content": message}
@@ -75,27 +88,25 @@ def chatbot_response(message: str, history: list[dict[str, Any]]):
 
     all_documents = closest_wiki_documents + closest_db_metadata + closest_meeting_metadata
 
-    reference_names: dict[str, str] = {}
+    reference_names: list[str] = []
     for d in all_documents:
-        name = d.metadata['TLSource'] + " -- " + d.metadata['source']
 
-        url = ""
-        if d.metadata['TLSource'] == "wiki" :       
+        name = ""
+        if d.metadata['TLSource'] == "wiki" :    
             file_path = d.metadata['source'].removeprefix("/wiki")
             url = "https://dev.azure.com/mpsvcrtest/DWH/_git/wiki?path=" + file_path
+            name = f"**WIKI**: [{d.metadata['source'].removeprefix("/wiki")}]({url})"
         elif d.metadata['TLSource'] == "meeting_transcript":
-            name = f"**Meeting transcript**: source: `{d.metadata['source']}` time: `{d.metadata['Timestamp']}`"
+            name = f"**Meeting transcript**: source: [`{d.metadata['source']}`]({d.metadata['source_link']}) time: `{d.metadata['Timestamp']}`"
         elif d.metadata['TLSource'] == "db_metadata":
             name = f"**database**: `{d.metadata['source']}`"
         
-        reference_names[name] = url
+        if name:
+            reference_names.append(name)
 
     links = ""
-    for name, url in reference_names.items():
-        if url:
-            links += f"\n- [{name}]({url})"
-        else:
-            links += f"\n- {name}"
+    for name in reference_names:
+        links += f"\n- {name}"
     total_text += f"\n\n\n### REFERENCE:\n{links}"
     yield {
         "role": "assistant",
@@ -111,4 +122,4 @@ gr.ChatInterface(
         height=800
     ),
     type="messages",
-).launch(share=True, server_port=5000)
+).launch(share=False, server_port=5000)

@@ -7,7 +7,11 @@ contextualize_system_message = (
     "formulate a standalone question which can be understood "
     "without the chat history. Do NOT answer the question, "
     "just reformulate it if needed and otherwise return as is. "
-    "Reformulate it in CZECH."
+    "\n\nIf in the message there are any implicit references to chat history, "
+    "then resolve them to explicit references. E.g., if user says that "
+    "we wants to know `what did he say` and in the chat history you see "
+    "that `he` refers to `<name> <surname>`, replace `he` with `<name> <surname>`."
+    "The reformulation following all the above instructions should be in CZECH."
 )
 
 def contextualize_user_message_with_history(message: str, history: list[dict[str, Any]]):
