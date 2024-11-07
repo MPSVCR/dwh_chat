@@ -119,7 +119,7 @@ gr.ChatInterface(
         elem_id="chatbot",
         show_label=True,
         type="messages",
-        height=800
+        height=300
     ),
     type="messages",
-).launch(share=False, server_port=5000)
+).launch(share=True, server_port=5000)
