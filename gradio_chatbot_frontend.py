@@ -111,4 +111,4 @@ gr.ChatInterface(
         height=800
     ),
     type="messages",
-).launch()
+).launch(share=True, server_port=5000)
