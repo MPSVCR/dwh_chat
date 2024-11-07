@@ -1,7 +1,7 @@
 from typing import Any
 import gradio as gr
 from rag.chat_model import model
-from rag.grader_model import get_relevant_db_metadata, get_relevant_wiki
+from rag.grader_model import get_relevant_db_metadata, get_relevant_meeting_data, get_relevant_wiki
 from rag.contextualize import contextualize_user_message_with_history
 
 chatbot_system_message = (
@@ -27,6 +27,7 @@ def chatbot_response(message: str, history: list[dict[str, Any]]):
 
     closest_wiki_documents = get_relevant_wiki(self_contained_msg)
     closest_db_metadata = get_relevant_db_metadata(self_contained_msg)
+    closest_meeting_metadata = get_relevant_meeting_data(self_contained_msg)
 
     system_prompt = ""
     
@@ -39,6 +40,15 @@ def chatbot_response(message: str, history: list[dict[str, Any]]):
         system_prompt += "Here are our database metadata that relate to the user's question\n"
         system_prompt += "DB metadata:\n"
         system_prompt += "\n\nDB metadata:\n".join(d.page_content for d in closest_db_metadata)
+
+    if closest_meeting_metadata:
+        system_prompt += (
+            "Here are excerpts from meetings that relate to the user's question\n"
+            "If you use the excerpt from a meeting, then instead of just referencing the information,\n"
+            "inform the user that \"according to Mr. Hajek <information>\""
+        )
+        system_prompt += "Meeting excerpt:\n"
+        system_prompt += "\n\nMeeting excerpt:\n".join(d.page_content for d in closest_meeting_metadata)
 
     if not system_prompt:
         system_prompt = chatbot_system_message + "Please respond that you have no relevant information for the user's query."
@@ -60,9 +70,28 @@ def chatbot_response(message: str, history: list[dict[str, Any]]):
         total_text += chunk.content
         yield total_text
 
-    all_documents = closest_wiki_documents + closest_db_metadata
+    all_documents = closest_wiki_documents + closest_db_metadata + closest_meeting_metadata
 
-    total_text += f"\n\n\n### REFERENCE:\n{'\n'.join('- *' + d.metadata['TLSource'] + ' -- ' + d.metadata['source'] + '*' for d in all_documents)}"
+    reference_names: dict[str, str] = {}
+    for d in all_documents:
+        name = d.metadata['TLSource'] + " -- " + d.metadata['source']
+
+        url = ""
+        if d.metadata['TLSource'] == "wiki" :       
+            file_path = d.metadata['source'].removeprefix("/wiki")
+            url = "https://dev.azure.com/mpsvcrtest/DWH/_git/wiki?path=" + file_path
+        elif d.metadata['TLSource'] == "meeting_transcript":
+            name = f"**Meeting transcript**: source: `{d.metadata['source']}` time: `{d.metadata['Timestamp']}`"
+        
+        reference_names[name] = url
+
+    links = ""
+    for name, url in reference_names.items():
+        if url:
+            links += f"\n- [{name}]({url})"
+        else:
+            links += f"\n- {name}"
+    total_text += f"\n\n\n### REFERENCE:\n{links}"
     yield {
         "role": "assistant",
         "content": total_text,
